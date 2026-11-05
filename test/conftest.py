@@ -10,7 +10,8 @@ from baretile.runtime import DATA, compile_kernel
 
 def bf16(a, packer=False):  # rounds to bf16 and back: to nearest even like our uploads, or half up like the packer
   b = np.asarray(a, np.float32).view(np.uint32)
-  return ((b + (0x8000 if packer else 0x7FFF + (b >> 16 & 1))) >> 16 << 16).view(np.float32).astype(np.float64)
+  u = np.uint32  # constants stay uint32: NumPy 1.x widens a 0-d uint32 plus a Python int to int64
+  return ((b + (u(0x8000) if packer else u(0x7FFF) + (b >> u(16) & u(1)))) >> u(16) << u(16)).view(np.float32).astype(np.float64)
 
 def value(t): return np.array(t.tolist()).reshape(t.shape)  # t as a numpy array of its shape
 

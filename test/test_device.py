@@ -1037,6 +1037,6 @@ def test_hung_kernel_times_out(chip):
   # a hang's report ends with each core's last three lines
   rt.launch(compile_kernel('void kmain(volatile unsigned *a) { for (unsigned i = 0; i < 5; i++) print("waiting on %u", i); for (;;); }'))
   with pytest.raises(TimeoutError, match=r"not finished by BRISC\n.*\n.*\n    printed \(1, 2\) BRISC: 2 earlier lines not shown\n"
-                     r"    printed \(1, 2\) BRISC, launch 1: waiting on 2\n.*\n.*waiting on 4$"): rt.wait(timeout=0.2)
+                     r"    printed \(1, 2\) BRISC, launch 1: waiting on 2\n.*\n.*waiting on 4(\n    pc .*)?$"): rt.wait(timeout=0.2)
   rt.close()  # a hung ordinary kernel holds cancellation up for at most the launch's two seconds
   assert rt.resources.closed
