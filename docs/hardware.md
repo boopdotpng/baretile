@@ -193,10 +193,13 @@ use initiator 0. The rules come from `NoC/MemoryMap.md` and `NoC/Counters.md`.
 
 A request carries at most 16 KiB. Source and destination must agree in their
 low four address bits for L1, or low six when DRAM is involved. Wait for an
-initiator to become free before changing its registers, and read back its
-command register before consulting completion counters. Writes and atomics must
-request acknowledgements (`NOC_CMD_RESP_MARKED`) to be counted; reads are always
-answered.
+initiator to become free before changing its registers, and before consulting
+completion counters: on a card, the outstanding-request counter only counts a
+request once its initiator has sent it, which is a while after the command
+register is written. Writes and atomics must request acknowledgements
+(`NOC_CMD_RESP_MARKED`) to be counted; reads are always answered. ARC's boot
+wipe of L1 broadcasts from the first Tensix tile and leaves its counters
+nonzero after every reset, so the firmware clears them before its first request.
 
 Multicast needs broadcast, path reservation and static VC class 2. Count write
 acknowledgements from the recipients. The outstanding-request counter goes up

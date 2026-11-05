@@ -68,7 +68,14 @@ static inline void noc_read(unsigned x, unsigned y, unsigned long long addr, uns
 // wrote, where there are none.
 #define NIU1(reg) NIU(INITIATOR + (reg))
 #define NIU2(reg) NIU(2 * INITIATOR + (reg))
+// Zero the request counters. A multicast leaves them wrong. So does ARC's boot wipe of L1, which broadcasts from the
+// first Tensix tile and leaves its id 0 nonzero after every reset, so firmware clears them before its first request.
+static inline void noc_clear(void) {{
+  NIU(CLEAR_OUTSTANDING) = 0xFFFF;
+  l1_settle({bh.NIU + bh.NIU_REGS["OUTSTANDING"]:#x});
+}}
 static inline void noc_setup(void) {{
+  noc_clear();
   NIU1(TARG_MID) = 0; NIU1(RET_MID) = 0; NIU1(RET_HI) = noc_me(); NIU1(PACKET_TAG) = 0; NIU1(CTRL) = READ;
   NIU2(TARG_MID) = 0; NIU2(TARG_HI) = noc_me(); NIU2(RET_MID) = 0; NIU2(PACKET_TAG) = 0; NIU2(CTRL) = WRITE;
 }}
@@ -101,14 +108,13 @@ static inline void mcast_begin(void) {{
 // the outstanding count wrong, up once and down once per tile, so no other request may be in flight. We clear it after.
 static inline void mcast_done(unsigned acks) {{
   while (NIU(WR_ACKS) != acks) {{}}
-  NIU(CLEAR_OUTSTANDING) = 0xFFFF;
-  l1_settle({bh.NIU + bh.NIU_REGS["OUTSTANDING"]:#x});
+  noc_clear();
   MCAST_STATE[1] = 0;
   l1_settle({MCAST_STATE + 4:#x});
 }}
 static inline void noc_wait(void) {{  // wait until reads have landed and writes are acknowledged
-  // reading the initiators back keeps the counter read behind their last requests
-  (void)NIU(CMD); (void)NIU1(CMD); (void)NIU2(CMD);
+  // the counter counts a request once its initiator has sent it, which on a card is a while after CMD is written
+  while ((NIU(CMD) | NIU1(CMD) | NIU2(CMD)) & 1) {{}}
   while (NIU(OUTSTANDING)) {{}}
   asm volatile("fence" ::: "memory");  // drop L0 data cache lines that the NoC may have overwritten
 }}
@@ -394,6 +400,7 @@ void loop(void) {{
   unsigned long long times = ring + size;  // launch n's [go, last report, flits read] at times + n % TIMES * 16
   unsigned words = 0;  // the flits the workers read, up to the last launch done
   unsigned staged = 0, first = 0;  // the ring's bytes [first, staged) are in STAGING
+  noc_clear();
   NIU1(TARG_LO) = {OUTBOX:#x}; NIU1(TARG_MID) = 0; NIU1(TARG_HI) = noc_me();
   NIU1(RET_LO) = {MAILBOX:#x}; NIU1(RET_MID) = 0;
   NIU1(RET_HI) = CONFIG[6]; NIU1(PACKET_TAG) = 0; NIU1(CTRL) = MCAST; NIU1(LEN) = 16;

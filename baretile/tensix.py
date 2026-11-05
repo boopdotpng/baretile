@@ -826,7 +826,8 @@ static void step(unsigned bfp, unsigned b, unsigned b_tile, unsigned b_slot, uns
   tagged(s + 1);
   if (b_slot != KEPT) {{ if (bfp) getb(b, b_tile, b_slot); else get(b, b_tile, b_slot); }}
   if (a_slot != KEPT) get(a, a_tile, a_slot);
-  (void)NIU1(CMD); asm volatile("fence" ::: "memory");  // the NIU must count the reads before TRISC0 sees ISSUED
+  while (NIU1(CMD) & 1) {{}}  // the NIU counts the reads once they're sent, which must be before TRISC0 sees ISSUED
+  asm volatile("fence" ::: "memory");
   stream_done[s] = ++events;
   SYNC[ISSUED] = ++steps;
 }}
@@ -861,7 +862,8 @@ static void stepc(unsigned bfp, unsigned j, unsigned run, unsigned len, unsigned
 static unsigned part_done[{CHUNKS}], chunks;
 static unsigned chunk_part(void) {{ unsigned p = chunks++ % {CHUNKS}; reached(part_done[p]); tagged(p + 1); return p; }}
 static void chunk_issued(unsigned p, unsigned k) {{
-  (void)NIU1(CMD); asm volatile("fence" ::: "memory");  // the NIU must count the reads before TRISC0 sees ISSUED
+  while (NIU1(CMD) & 1) {{}}  // the NIU counts the reads once they're sent, which must be before TRISC0 sees ISSUED
+  asm volatile("fence" ::: "memory");
   part_done[p] = events += k;
   SYNC[ISSUED] = steps += k;
 }}
