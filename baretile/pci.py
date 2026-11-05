@@ -241,7 +241,8 @@ class Kmd:
     self.bar0 = ctypes.addressof(ctypes.c_char.from_buffer(self.map))
     self.windows = {}  # baretile's TLB index: (kmd's id for it, its mapping, the mapping's address)
     # Closing the file gives back its lock, and kmd frees its TLBs and pins. The mappings hold their own references
-    weakref.finalize(self, os.close, self.fd)
+    # Not at exit: runtime._exit stops the cores through this file, and exit releases it anyway
+    weakref.finalize(self, os.close, self.fd).atexit = False
 
   def call(self, name, **values):
     """Run tt-kmd's ioctl name with its argument's members set from values, the rest zero, and return the
@@ -320,7 +321,7 @@ class Kmd:
     def unpin():
       try: fcntl.ioctl(fd, 0xFA << 8 | KMD["UNPIN_PAGES"], struct.pack(_kmd_layout("UNPIN_PAGES"), va, 1 << 21, 0))
       except OSError: pass  # the device file closed first, and kmd unpinned everything then
-    weakref.finalize(buf, unpin)
+    weakref.finalize(buf, unpin).atexit = False  # the card may use the pages until runtime._exit stops it
     return memoryview(buf)[:size], got["out.noc_address"]
 
   def message(self, header):
